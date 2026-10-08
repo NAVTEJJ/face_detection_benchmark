@@ -137,7 +137,7 @@ def plot_comparison_table(cnn_metrics, qnn_metrics, save_path="outputs/compariso
         ["F1-Score",                     f"{cnn_metrics['f1']:.4f}",             f"{qnn_metrics['f1']:.4f}"],
         ["ROC-AUC",                      f"{cnn_metrics['roc_auc']:.4f}",        f"{qnn_metrics['roc_auc']:.4f}"],
         ["Total Trainable Params",       f"{cnn_metrics['n_params']:,}",         f"{qnn_metrics['n_params']:,}"],
-        ["Quantum Variational Params",   "—",                                    f"{qnn_metrics['q_params']}"],
+        ["Quantum Params (frozen)",      "—",                                    f"{qnn_metrics['q_params']}"],
         ["Qubit Count",                  "—",                                    "4"],
         ["Circuit Depth",                "—",                                    f"{qnn_metrics.get('circuit_depth', '?')}"],
         ["Training Time (s)",            f"{cnn_metrics['train_time']:.1f}",     f"{qnn_metrics['train_time']:.1f}"],
@@ -280,7 +280,7 @@ def generate_arch_diagram(cnn_params=None, qnn_params=None, circuit_depth=None, 
     qnn_info = None
     if qnn_params is not None:
         depth_str = str(circuit_depth) if circuit_depth is not None else "?"
-        qnn_info = f"Params: {qnn_params:,}  |  Qubits: 4  |  Depth: {depth_str}  |  Variational: 24"
+        qnn_info = f"Params: {qnn_params:,}  |  Qubits: 4  |  Depth: {depth_str}  |  Frozen quantum: 24"
 
     cnn_rects = _draw_column(ax, CNN_BLOCKS, x_center=0.27, cnn_params=cnn_params)
     qnn_rects = _draw_column(ax, QNN_BLOCKS, x_center=0.73, qnn_info=qnn_info)

@@ -1,0 +1,24 @@
+{
+  "old": {
+    "label": "OLD negatives: airplane/automobile/ship/truck",
+    "n": 6046,
+    "sharpness_acc": 0.6359576579556732,
+    "sharpness_auc": 0.658432883454219,
+    "sharpness_d": 0.6309056878089905,
+    "intensity_acc": 0.5636784651008931,
+    "intensity_auc": 0.5023693091087198,
+    "pixel_acc": 0.9512396694214876,
+    "pixel_auc": 0.990782050406393
+  },
+  "new": {
+    "label": "NEW negatives: all 10 CIFAR-10 classes",
+    "n": 6046,
+    "sharpness_acc": 0.5744293747932517,
+    "sharpness_auc": 0.5433027022182673,
+    "sharpness_d": 0.28901273012161255,
+    "intensity_acc": 0.5860072775388687,
+    "intensity_auc": 0.565719767371751,
+    "pixel_acc": 0.9537190082644628,
+    "pixel_auc": 0.993120688477563
+  }
+}

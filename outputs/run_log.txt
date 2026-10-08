@@ -1,0 +1,141 @@
+
+--- Face Detection Benchmark (Stage 1) ---
+Classical 12-Net CNN vs Quanvolutional QNN
+
+Loading dataset...
+Loading LFW faces...
+  LFW: 3023 face images -> resized to 32x32
+Loading CIFAR-10 negatives...
+  CIFAR-10 negatives: 3023 sampled from 60000 available
+    classes (10): airplane, automobile, bird, cat, deer, dog, frog, horse, ship, truck
+    per-class in train+test negatives: airplane=309, automobile=315, bird=295, cat=289, deer=284, dog=304, frog=282, horse=313, ship=315, truck=317
+    held-out pool for imbalanced eval: 6040 (disjoint)
+
+Dataset ready:
+  Total:  6046 samples (3023 faces, 3023 non-faces)
+  Train:  4836 | Test: 1210
+
+=== Gate G0: trivial-baseline separability ===
+
+  train split  (n=4836)
+    sharpness (Laplacian var) : acc 0.5883  AUC 0.5710  Cohen's d 0.36
+    mean intensity            : acc 0.5815  AUC 0.5543
+    raw-pixel logistic        : acc 0.9556  AUC 0.9921
+    GATE G0: PASS - no single scalar exceeds AUC 0.571
+
+Training Classical CNN...
+  CNN Epoch 01/15  loss=0.4803  acc=0.7936
+  CNN Epoch 02/15  loss=0.1415  acc=0.9636
+  CNN Epoch 03/15  loss=0.0725  acc=0.9793
+  CNN Epoch 04/15  loss=0.0519  acc=0.9853
+  CNN Epoch 05/15  loss=0.0429  acc=0.9878
+  CNN Epoch 06/15  loss=0.0423  acc=0.9868
+  CNN Epoch 07/15  loss=0.0390  acc=0.9861
+  CNN Epoch 08/15  loss=0.0321  acc=0.9901
+  CNN Epoch 09/15  loss=0.0297  acc=0.9895
+  CNN Epoch 10/15  loss=0.0302  acc=0.9895
+  CNN Epoch 11/15  loss=0.0226  acc=0.9930
+  CNN Epoch 12/15  loss=0.0199  acc=0.9940
+  CNN Epoch 13/15  loss=0.0195  acc=0.9932
+  CNN Epoch 14/15  loss=0.0250  acc=0.9926
+  CNN Epoch 15/15  loss=0.0171  acc=0.9946
+  CNN training done in 46.7s
+
+==================================================
+ Classical 12-Net CNN
+==================================================
+  Accuracy  : 0.9917
+  Precision : 0.9983
+  Recall    : 0.9851
+  F1-Score  : 0.9917
+  ROC-AUC   : 0.9999
+  Params    : 65,746
+  Train time: 46.7s
+  Latency   : 0.76 +/- 0.56 ms/patch
+  Full img  : 0.76 ms
+
+Setting up Quanvolutional QNN...
+  Circuit depth: 15  |  Variational params: 24
+  Computing quanv features for 4836 images (batched circuit evaluation)...
+    fast path vs per-patch reference: max abs diff 2.38e-07
+    done in 31.9s (152 img/s)
+  Saved to data\cache\quanv_features_train_3f6ab5de837efc90.pt
+  Computing quanv features for 1210 images (batched circuit evaluation)...
+    fast path vs per-patch reference: max abs diff 2.38e-07
+    done in 11.9s (102 img/s)
+  Saved to data\cache\quanv_features_test_c61c16ee8ba908b1.pt
+Training QNN...
+  QNN Epoch 01/10  loss=0.5717  acc=0.7893
+  QNN Epoch 02/10  loss=0.3472  acc=0.8784
+  QNN Epoch 03/10  loss=0.2624  acc=0.9074
+  QNN Epoch 04/10  loss=0.2181  acc=0.9225
+  QNN Epoch 05/10  loss=0.1950  acc=0.9293
+  QNN Epoch 06/10  loss=0.1779  acc=0.9347
+  QNN Epoch 07/10  loss=0.1660  acc=0.9382
+  QNN Epoch 08/10  loss=0.1556  acc=0.9413
+  QNN Epoch 09/10  loss=0.1483  acc=0.9431
+  QNN Epoch 10/10  loss=0.1419  acc=0.9454
+  QNN training done in 5.5s
+
+==================================================
+ Quanvolutional QNN
+==================================================
+  Accuracy  : 0.9545
+  Precision : 0.9630
+  Recall    : 0.9455
+  F1-Score  : 0.9541
+  ROC-AUC   : 0.9891
+  Params    : 4,146
+  Q-Params  : 24  |  Depth: 15
+  Train time: 5.5s
+  Latency   : 15.39 +/- 3.23 ms/patch
+  Full img  : 3939.84 ms
+
+==================================================
+ Imbalanced evaluation
+==================================================
+  Set: 604 faces / 6040 background
+  Background drawn from a CIFAR pool held out of both train and test.
+
+  Classical CNN @ 1:10 (604 faces / 6040 background)
+    Precision : 0.9566   (-0.0417 vs balanced)
+    F1        : 0.9706   (-0.0210 vs balanced)
+    Recall    : 0.9851
+    ROC-AUC   : 0.9996   (balance-invariant)
+    Avg Prec  : 0.9962   (balance-sensitive)
+    FP / FN   : 27 / 9   (FPR 0.0045)
+  Computing quanv features for 6644 images (batched circuit evaluation)...
+    fast path vs per-patch reference: max abs diff 2.38e-07
+    done in 44.0s (151 img/s)
+  Saved to data\cache\quanv_features_imbalanced_33bf39383f71e163.pt
+
+  Quanvolutional QNN @ 1:10 (604 faces / 6040 background)
+    Precision : 0.5856   (-0.3773 vs balanced)
+    F1        : 0.7232   (-0.2309 vs balanced)
+    Recall    : 0.9454
+    ROC-AUC   : 0.9840   (balance-invariant)
+    Avg Prec  : 0.9202   (balance-sensitive)
+    FP / FN   : 404 / 33   (FPR 0.0669)
+
+Generating plots...
+Training curves saved to outputs/training_curves.png
+ROC curves saved to outputs/roc_curves.png
+Confusion matrices saved to outputs/confusion_matrices.png
+Misclassified examples saved to outputs/misclassified.png
+Comparison table saved to outputs/comparison_table.png
+
+Generating architecture diagram...
+Architecture diagram saved to outputs/architecture_diagram.png
+Metrics saved to outputs/metrics.json
+
+--- Summary ---
+Gate G0: sharpness AUC 0.571, raw-pixel AUC 0.992  ->  PASS
+Quantum layer: FROZEN (random projection; 24 params never trained)
+Imbalanced 1:10 precision  CNN 0.9566  |  QNN 0.5856
+Better model (F1): CNN
+CNN  F1=0.9917  AUC=0.9999  Latency=0.76ms
+QNN  F1=0.9541  AUC=0.9891  Latency=15.39ms/patch  Full=3939.8ms
+
+All outputs in outputs/
+Done.
+
