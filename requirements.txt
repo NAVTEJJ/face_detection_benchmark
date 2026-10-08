@@ -1,0 +1,19 @@
+# Core Deep Learning Framework
+torch>=2.0.0
+torchvision>=0.15.0
+
+# Quantum Computing & Quantum Machine Learning
+pennylane>=0.35.0
+pennylane-lightning>=0.35.0
+
+# Machine Learning & Data Science Utilities
+scikit-learn>=1.2.0
+numpy>=1.22.0
+
+# Data Visualization & Plotting
+matplotlib>=3.7.0
+Pillow>=9.0.0
+
+# Interactive Jupyter Notebook Support
+jupyter>=1.0.0
+notebook>=6.4.0
