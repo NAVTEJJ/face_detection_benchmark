@@ -46,7 +46,13 @@
          background: #f1f1ee; padding: 1px 5px; border-radius: 4px; }
   ul { padding-left: 22px; }
   li { margin: 4px 0; }
-  @media print { nav { display: none; } h2 { break-before: page; } figure { break-inside: avoid; } }
+  @media print {
+    nav { display: none; }
+    main { padding-top: 0; }
+    h2 { margin-top: 28px; break-after: avoid; }
+    figure, .tile, table, .note { break-inside: avoid; }
+    .two { grid-template-columns: 1fr 1fr; }
+  }
 </style>
 </head>
 <body>

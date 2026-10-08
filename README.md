@@ -3,7 +3,7 @@
 
 ---
 
-**Results at a glance:** open `PRESENTATION.html` (single file, works offline). Rebuild it with `python make_presentation.py`.
+**Results at a glance:** open `PRESENTATION.html` (single file, works offline) or `PRESENTATION.pdf`. Rebuild with `python make_presentation.py`.
 
 ---
 
