@@ -1,0 +1,13 @@
+Loading LFW faces...
+  LFW: 3023 face images -> resized to 32x32
+Loading CIFAR-10 negatives...
+  CIFAR-10 negatives: 3023 sampled from 60000 available
+    classes (10): airplane, automobile, bird, cat, deer, dog, frog, horse, ship, truck
+    per-class in train+test negatives: airplane=311, automobile=312, bird=295, cat=288, deer=283, dog=303, frog=284, horse=311, ship=317, truck=319
+    held-out pool for imbalanced eval: 6060 (disjoint)
+cnn_original        test acc 0.9901 (study seed 0: 0.9901)  2s
+cnn_matched         test acc 0.9653 (study seed 0: 0.9653)  0s
+cnn_matched_frozen  test acc 0.9603 (study seed 0: 0.9603)  0s
+qnn_frozen          test acc 0.9545 (study seed 0: 0.9545)  40s
+qnn_trained         test acc 0.9678 (study seed 0: 0.9678)  502s
+saved checkpoints/

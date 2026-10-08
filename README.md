@@ -6,6 +6,8 @@ Faces come from LFW, non-faces from CIFAR-10, and every image is a 32×32 graysc
 
 **Results page:** https://navtejj.github.io/face_detection_benchmark/PRESENTATION.html (also `PRESENTATION.html` and `PRESENTATION.pdf` in this repo, both work offline)
 
+**Interactive simulator notebook:** `notebooks/quantum_face_simulator.ipynb`. Run the quantum circuit, view feature maps, classify images and simulate deployment, all with sliders. [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/NAVTEJJ/face_detection_benchmark/blob/main/notebooks/quantum_face_simulator.ipynb)
+
 ---
 
 ## Contents
@@ -116,13 +118,33 @@ python make_presentation.py     # PRESENTATION.html, built from outputs/
 
 For the PDF, open `PRESENTATION.html` in a browser and print to PDF.
 
-### Optional: notebook
+### Interactive simulator notebook
 
-```bash
-jupyter notebook notebooks/face_detection_benchmark.ipynb
-```
+`notebooks/quantum_face_simulator.ipynb` is a hands-on interface to the whole project. It loads five already-trained models from `checkpoints/`, so nothing trains while you use it.
 
-This walks through the single run (step 1) cell by cell.
+**Open it** in any of these ways:
+
+| Where | How |
+|---|---|
+| Windows, one click | double-click `launch_simulator.bat` (opens JupyterLab in your browser) |
+| Any machine with the repo | `jupyter lab notebooks/quantum_face_simulator.ipynb` |
+| VS Code | open the `.ipynb` file and pick a Python kernel |
+| Any device, nothing installed | click the **Open in Colab** badge at the top of this README (the first cell clones the repo and installs PennyLane; the first data download takes a few minutes) |
+
+Then choose **Run → Run All Cells**. The first cell takes about 20 seconds to load the data.
+
+| Section | Controls | What it shows |
+|---|---|---|
+| 1. The circuit | none | the 4-qubit circuit with the trained weights |
+| 2. Circuit simulator | 4 pixel sliders, random/trained weights, number of shots, "measure again" | the 16-state quantum probability distribution and the 4 ⟨Z⟩ outputs, exact vs estimated from shots like real hardware |
+| 3. Quanvolution viewer | face / non-face, image number | the 4 feature maps from the random circuit, the trained circuit, and the same-shape classical layer |
+| 4. Live detector | image, brightness, contrast, noise | each of the five models' probability that the image is a face |
+| 5. Deployment simulator | background windows per face (1–100), threshold | precision, recall, false-positive rate and false alarms per 100 faces for every model |
+| 6. Study results | none | the 5-seed comparison table, paired tests and figure |
+
+The checkpoints were made by `python train_checkpoints.py`, which trains each model once with exactly the study's seed-0 settings; their test accuracy matches the study's seed-0 numbers. Run it again only if you change a model.
+
+`notebooks/face_detection_benchmark.ipynb` is the older, non-interactive walk-through of the single run (step 1).
 
 ---
 
@@ -141,6 +163,8 @@ This walks through the single run (step 1) cell by cell.
 | `outputs/fig_study.png` | `src.study_report` | All study models with confidence intervals |
 | `outputs/roc_curves.png`, `confusion_matrices.png`, `training_curves.png`, `comparison_table.png`, `misclassified.png`, `class_balance.png` | `main.py` | Single-run figures |
 | `PRESENTATION.html` / `.pdf` | `make_presentation.py` | Everything above on one page |
+| `checkpoints/*.pt` | `train_checkpoints.py` | The five trained models (seed 0) used by the simulator notebook |
+| `checkpoints/scores.npz` | `train_checkpoints.py` | Each model's face probability on the test set and background pool (for the deployment simulator) |
 
 ---
 
@@ -151,6 +175,8 @@ face_detection_benchmark/
 ├── main.py                     single benchmark run
 ├── study.py                    controlled 5-seed study
 ├── make_presentation.py        builds PRESENTATION.html from outputs/
+├── train_checkpoints.py        trains the five models once for the notebook
+├── launch_simulator.bat        one-click: opens the simulator notebook (Windows)
 ├── PRESENTATION.html / .pdf    results page
 ├── requirements.txt
 ├── src/
@@ -161,6 +187,7 @@ face_detection_benchmark/
 │   ├── plots.py                single-run figures
 │   ├── plots_findings.py       gate and 1:10 figures
 │   ├── study_report.py         study statistics and figure
+│   ├── demo.py                 helpers for the simulator notebook
 │   ├── models/
 │   │   ├── classical_12net.py  original CNN
 │   │   ├── quanv_12net.py      QNN on PennyLane (frozen circuit, cached features)
@@ -172,7 +199,10 @@ face_detection_benchmark/
 │   ├── test_pipeline.py
 │   ├── test_gate_g0.py
 │   └── test_torch_quanv.py
-├── notebooks/face_detection_benchmark.ipynb
+├── notebooks/
+│   ├── quantum_face_simulator.ipynb   interactive simulator
+│   └── face_detection_benchmark.ipynb  single-run walk-through
+├── checkpoints/                trained models + scores for the notebook (committed)
 ├── outputs/                    all results and figures (committed)
 └── data/cache/                 downloaded CIFAR-10 and feature cache (not committed)
 ```

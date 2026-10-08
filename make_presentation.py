@@ -370,6 +370,7 @@ def main():
     <li><code>python -m src.baseline_g0</code>: validity gate, old vs new negatives.</li>
     <li><code>python tests/test_pipeline.py</code> and <code>python tests/test_gate_g0.py</code>: checks that train, test and background sets never overlap, and that the gate catches known confounds.</li>
     {REPRO_STUDY}
+    <li><code>notebooks/quantum_face_simulator.ipynb</code>: interactive simulator (circuit, feature maps, live detector, deployment sliders). Open with <code>launch_simulator.bat</code>, <code>jupyter lab</code>, or <a href="https://colab.research.google.com/github/NAVTEJJ/face_detection_benchmark/blob/main/notebooks/quantum_face_simulator.ipynb">Google Colab</a>.</li>
     <li><code>python make_presentation.py</code>: rebuilds this page from <code>outputs/</code>.</li>
   </ul>
 </section>
