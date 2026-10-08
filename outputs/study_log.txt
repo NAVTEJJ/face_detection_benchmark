@@ -26,3 +26,9 @@ Loading CIFAR-10 negatives...
 [   324s] seed 2 qnn_frozen          epoch 12 | acc 0.9719 auc 0.9970 | 1:10 prec 0.7571 AP 0.9636 FP  187 | 28.6s
 [   354s] seed 3 qnn_frozen          epoch 11 | acc 0.9694 auc 0.9958 | 1:10 prec 0.7568 AP 0.9779 FP  188 | 30.2s
 [   384s] seed 4 qnn_frozen          epoch 12 | acc 0.9570 auc 0.9894 | 1:10 prec 0.7431 AP 0.9449 FP  196 | 30.2s
+[   760s] seed 0 qnn_trained         epoch 11 | acc 0.9678 auc 0.9963 | 1:10 prec 0.7885 AP 0.9731 FP  155 | 375.9s
+[  1153s] seed 1 qnn_trained         epoch 12 | acc 0.9736 auc 0.9964 | 1:10 prec 0.8047 AP 0.9711 FP  141 | 392.6s
+[  1493s] seed 2 qnn_trained         epoch 12 | acc 0.9785 auc 0.9970 | 1:10 prec 0.7646 AP 0.9760 FP  181 | 340.3s
+[  1831s] seed 3 qnn_trained         epoch 11 | acc 0.9752 auc 0.9969 | 1:10 prec 0.7948 AP 0.9812 FP  151 | 337.9s
+[  2162s] seed 4 qnn_trained         epoch 12 | acc 0.9793 auc 0.9971 | 1:10 prec 0.8357 AP 0.9794 FP  115 | 330.9s
+study complete
