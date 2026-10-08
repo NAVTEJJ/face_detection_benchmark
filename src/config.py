@@ -39,3 +39,9 @@ IMBALANCE_RATIO        = 10
 # features cheap enough that the full test split fits comfortably, so this is
 # set above the real face count and no subsampling happens in practice.
 IMBALANCE_MAX_FACES    = 10_000
+
+# Controlled multi-seed study (study.py). Every model gets the same epoch
+# budget and the same rule for picking its epoch: lowest validation loss.
+STUDY_SEEDS            = [0, 1, 2, 3, 4]
+STUDY_EPOCHS           = 12
+VAL_SPLIT              = 0.1   # fraction of the training split held out for epoch selection

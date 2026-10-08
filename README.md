@@ -175,6 +175,29 @@ Phases 1→2 is a head swap, not a rebuild. The same backbone carries forward.
 
 ---
 
+## Controlled study (5 seeds)
+
+The single run above compares models that differ in more than the quantum layer. `study.py` fixes that:
+
+- **Matched CNN** with the QNN's exact shape: 2×2 conv, stride 2, 4 channels, tanh, then the same pool and the same 256 → 16 → 2 head (20 front-end parameters vs the circuit's 24).
+- **Classical random baseline**: the same conv left at its random init, the fair opponent for the frozen circuit.
+- **Trained circuit**: `src/models/torch_quanv.py` re-implements the circuit as a PyTorch statevector so gradients reach it. Checked against PennyLane to ~5e-7 in value and ~3e-7 in gradient vs parameter-shift (`tests/test_torch_quanv.py`).
+- **Same training for every model**: Adam 1e-3, batch 64, 12 epochs, best epoch by validation loss on a 10% split.
+- **5 seeds**, each a different split and init; mean ± 95% CI, plus paired seed-by-seed differences.
+
+Results: `outputs/study_summary.json`, `outputs/fig_study.png`, and section 5 of `PRESENTATION.html`.
+
+So far the clearest result is that random quantum features and random classical features of the same shape perform the same (paired balanced-accuracy difference −0.0003 ± 0.022). Most of the CNN–QNN gap in the single run came from the CNN's 16× larger classifier head.
+
+```bash
+python study.py                 # resumable; appends to outputs/study_runs.jsonl
+python -m src.study_report      # summary json + figure
+python make_presentation.py     # rebuild the results page
+python tests/test_torch_quanv.py
+```
+
+---
+
 ## Known Limitations
 
 - **Single seed, single split.** Every number here comes from one run with `random_state=42`. There are no error bars, so the CNN-QNN gap has no variance estimate attached and small differences should not be read as real.
@@ -200,4 +223,5 @@ The feature cache is keyed by a SHA-256 of the exact pixels, the circuit weights
 ```bash
 python tests/test_pipeline.py   # split disjointness, imbalance ratio, held-out background
 python tests/test_gate_g0.py    # G0 fires on known confounds, stays quiet on a clean task
+python tests/test_torch_quanv.py  # trainable circuit matches PennyLane, values and gradients
 ```

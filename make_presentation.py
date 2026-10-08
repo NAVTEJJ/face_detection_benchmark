@@ -22,6 +22,87 @@ def pct(x):
     return f"{x:.3f}"
 
 
+ARM_ORDER = ["cnn_original", "cnn_matched", "cnn_matched_frozen", "qnn_frozen", "qnn_trained"]
+ARM_ROWS = {
+    "cnn_original":       ("CNN, original", "16 ch 3&times;3 conv, 4,096-input head (reference)"),
+    "cnn_matched":        ("CNN, matched", "2&times;2 conv, 4 ch, stride 2, trained"),
+    "cnn_matched_frozen": ("CNN, matched, frozen", "same conv left at random init"),
+    "qnn_frozen":         ("QNN, frozen", "4-qubit circuit left at random init"),
+    "qnn_trained":        ("QNN, trained", "4-qubit circuit trained end-to-end"),
+}
+
+
+def _mci(e, fmt="{:.3f}"):
+    return f"{fmt.format(e['mean'])} <span class=\"ci\">&plusmn; {fmt.format(e['ci95'])}</span>"
+
+
+def _verdict(d):
+    lo, hi = d["mean_diff"] - d["ci95"], d["mean_diff"] + d["ci95"]
+    if lo <= 0 <= hi:
+        return "no clear difference"
+    return "first is higher" if d["mean_diff"] > 0 else "first is lower"
+
+
+def study_section(st, fig):
+    arms = [a for a in ARM_ORDER if a in st["arms"]]
+    n = max(st["arms"][a]["n_seeds"] for a in arms)
+    rows = []
+    for a in arms:
+        e = st["arms"][a]
+        name, desc = ARM_ROWS[a]
+        rows.append(
+            f"<tr><td><b>{name}</b><br><span class=\"ci\">{desc}</span></td>"
+            f"<td>{e['trainable_params']:,}</td>"
+            f"<td>{_mci(e['balanced.accuracy'])}</td><td>{_mci(e['balanced.roc_auc'])}</td>"
+            f"<td>{_mci(e['imbalanced.precision'])}</td><td>{_mci(e['imbalanced.avg_precision'])}</td>"
+            f"<td>{_mci(e['imbalanced.false_positives'], '{:.0f}')}</td></tr>")
+
+    crow = []
+    for c in st["contrasts"]:
+        cells = []
+        for key in ["balanced.accuracy", "imbalanced.precision", "imbalanced.avg_precision"]:
+            d = c[key]
+            md = 0.0 if abs(d["mean_diff"]) < 5e-4 else d["mean_diff"]
+            cells.append(f"<td>{md:+.3f} <span class=\"ci\">&plusmn; {d['ci95']:.3f}</span>"
+                         f"<br><span class=\"ci\">{_verdict(d)}</span></td>")
+        crow.append(f"<tr><td>{c['question']}<br><span class=\"ci\">{c['n_pairs']} paired seeds</span></td>"
+                    + "".join(cells) + "</tr>")
+
+    has_trained = "qnn_trained" in st["arms"]
+    title = "matched capacity, trained circuit" if has_trained else "matched capacity (trained-circuit runs in progress)"
+    pending = "" if has_trained else (
+        "<p class=\"note\"><b>In progress:</b> the trained-circuit model (5 more runs, about 5 minutes each on a CPU) "
+        "is still running. This section updates when it finishes.</p>")
+    moved = st["arms"].get("qnn_trained", {}).get("circuit_weight_change_max")
+    moved_txt = (f" In the trained arm the circuit parameters moved by up to {moved:.2f} rad, "
+                 f"so gradients do reach the circuit.") if moved is not None else ""
+
+    return f"""
+<section id="study">
+  <h2>5. Controlled study: {n} seeds, {title}</h2>
+  {pending}
+  <p>The single run above cannot attribute the gap to the quantum layer: the models differ in head size and epochs, the circuit is never trained, and there is one seed. This study fixes all three.</p>
+  <ul>
+    <li><b>Matched capacity.</b> The matched CNN has the QNN's exact shape: a 2&times;2, stride-2, 4-channel front end (one output per patch per channel, like the 4 qubits), tanh to keep outputs in [&minus;1, 1] like a Pauli-Z expectation, then the same pool and the same 256&nbsp;&rarr;&nbsp;16&nbsp;&rarr;&nbsp;2 head. Front ends: 20 classical parameters vs 24 quantum.</li>
+    <li><b>Trained circuit.</b> The circuit is re-implemented as a PyTorch statevector so gradients reach it. It matches PennyLane to 5&times;10<sup>&minus;7</sup> in value and to 3&times;10<sup>&minus;7</sup> in gradient against PennyLane's parameter-shift rule.{moved_txt}</li>
+    <li><b>Same training for every model.</b> Adam, lr 10<sup>&minus;3</sup>, batch 64, 12 epochs; each model keeps the epoch with the lowest loss on a 10% validation split.</li>
+    <li><b>Variance.</b> Each seed is a different train/validation/test split and initialisation. Values are mean &plusmn; 95% confidence interval over seeds.</li>
+  </ul>
+  <figure><img src="{fig}" alt="Study results with confidence intervals"></figure>
+  <div class="wrap"><table>
+    <tr><th>Model</th><th>Trainable params</th><th>Balanced acc.</th><th>ROC-AUC</th><th>1:10 precision</th><th>1:10 avg. precision</th><th>1:10 false pos.</th></tr>
+    {"".join(rows)}
+  </table></div>
+  <h3>Paired comparisons (same splits; difference = first minus second)</h3>
+  <div class="wrap"><table>
+    <tr><th>Question</th><th>Balanced acc.</th><th>1:10 precision</th><th>1:10 avg. precision</th></tr>
+    {"".join(crow)}
+  </table></div>
+  <p class="sub">"No clear difference" means the 95% interval of the paired difference includes zero.</p>
+</section>
+"""
+
+
 def main():
     with open("outputs/metrics.json") as f:
         m = json.load(f)
@@ -32,10 +113,47 @@ def main():
     cnn_i, qnn_i = m["cnn_imbalanced"], m["qnn_imbalanced"]
     g0 = m["gate_g0"]
 
+    st = None
+    if os.path.exists("outputs/study_summary.json") and os.path.exists("outputs/fig_study.png"):
+        with open("outputs/study_summary.json") as f:
+            st = json.load(f)
+    study_html = study_section(st, img("outputs/fig_study.png")) if st else ""
+    nav_study = '<a href="#study">Controlled study</a>' if st else ""
+    single = " (single run)" if st else ""
+    k = 1 if st else 0
+
     figs = {k: img(f"outputs/{k}.png") for k in [
         "fig_gate_g0", "fig_imbalance",
         "roc_curves", "confusion_matrices", "training_curves",
     ]}
+
+    if st:
+        LIMITS = (
+            "<li><b>Sections 2&ndash;4 are a single run</b> (seed 42, original models). Use the controlled study in section 5 for any CNN vs QNN claim.</li>"
+            "<li><b>Simulated, noiseless circuit.</b> All quantum results are exact statevector simulation on a CPU. Hardware noise would only lower the QNN numbers.</li>"
+            "<li><b>Small circuit.</b> 4 qubits, 2 layers, 24 parameters. Nothing here says how larger circuits behave.</li>"
+            "<li><b>Balanced training only.</b> Every model trains at 1:1 and is tested at 1:10. Training at a skewed ratio, where focal loss would become relevant, has not been tried.</li>"
+            "<li><b>Patch classification, not full detection.</b> The task classifies 32&times;32 patches; there is no detection on whole images yet.</li>")
+        NEXT = (
+            "<li>Train at the skewed ratio and compare plain cross-entropy with focal loss.</li>"
+            "<li>Add depolarising noise to the circuit to see how much of the QNN result survives realistic hardware.</li>"
+            "<li>Scale the circuit (more layers, larger patches) with the matched classical counterpart scaled alongside.</li>"
+            "<li>Run as a sliding-window detector on full images (e.g. WIDER FACE) and report average precision.</li>")
+        REPRO_STUDY = ("<li><code>python study.py</code> then <code>python -m src.study_report</code>: the controlled "
+                       "5-seed study and its summary (<code>outputs/study_runs.jsonl</code>, "
+                       "<code>outputs/study_summary.json</code>).</li>")
+    else:
+        LIMITS = (
+            "<li><b>The quantum circuit is not trained.</b> Quantum features are computed once and cached to disk, and the classifier trains on the cached tensor, so the loss never reaches the 24 circuit parameters. The QNN is therefore a <i>fixed random quantum feature</i> baseline. Its parameters are marked as frozen so the parameter count reflects this.</li>"
+            "<li><b>The two models are not capacity-matched.</b> The CNN's classifier receives 4,096 inputs (16 channels &times; 16&times;16); the QNN's receives 256 (4 channels pooled to 8&times;8). The CNN also trains for 15 epochs against 10. The accuracy gap cannot yet be attributed to the quantum layer.</li>"
+            "<li><b>One seed, one split.</b> No error bars yet, so small differences should not be read as real.</li>"
+            "<li><b>No validation set.</b> Epoch counts are fixed rather than tuned.</li>")
+        NEXT = (
+            "<li>Match capacity: same channel count and pooling into the classifier, same epoch budget for both models.</li>"
+            "<li>Train the circuit end-to-end and compare against the fixed-circuit result.</li>"
+            "<li>Repeat over 5 seeds and report means with confidence intervals.</li>"
+            "<li>Train at the skewed ratio as well; focal loss only becomes relevant then.</li>")
+        REPRO_STUDY = ""
 
     html = f"""<!doctype html>
 <html lang="en">
@@ -78,6 +196,7 @@ def main():
   .wrap {{ overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; }}
   .dot {{ display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; }}
   .bad {{ font-weight: 600; }}
+  .ci {{ color: var(--muted); font-size: 13px; }}
   .note {{ background: var(--warn); border-radius: 10px; padding: 14px 16px; }}
   .two {{ display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }}
   @media (max-width: 760px) {{ .two {{ grid-template-columns: 1fr; }} }}
@@ -98,7 +217,7 @@ def main():
 <nav><div>
   <a href="#summary">Summary</a><a href="#setup">Setup</a><a href="#g0">Validity check</a>
   <a href="#imbalance">Main result</a><a href="#balanced">Balanced results</a>
-  <a href="#limits">Limitations</a><a href="#next">Next steps</a><a href="#repro">Reproduce</a>
+  {nav_study}<a href="#limits">Limitations</a><a href="#next">Next steps</a><a href="#repro">Reproduce</a>
 </div></nav>
 <main>
 
@@ -137,7 +256,7 @@ def main():
 </section>
 
 <section id="imbalance">
-  <h2>3. Main result: performance at a realistic class ratio</h2>
+  <h2>3. Performance at a realistic class ratio{single}</h2>
   <p>A sliding-window detector sees far more background than faces. The models were therefore also tested on <b>{qnn_i['n_pos']} test faces + {qnn_i['n_neg']:,} background images</b> (1:10). None of the background images were used in training or in the balanced test set.</p>
   <figure><img src="{figs['fig_imbalance']}" alt="Precision and ROC-AUC, balanced vs 1:10"></figure>
   <div class="wrap"><table>
@@ -153,7 +272,7 @@ def main():
 </section>
 
 <section id="balanced">
-  <h2>4. Balanced test set (1:1, 1,210 images)</h2>
+  <h2>4. Balanced test set (1:1, 1,210 images){single}</h2>
   <div class="wrap"><table>
     <tr><th>Metric</th><th><span class="dot" style="background:var(--cnn)"></span>CNN</th><th><span class="dot" style="background:var(--qnn)"></span>QNN</th></tr>
     <tr><td>Accuracy</td><td>{pct(cnn['accuracy'])}</td><td>{pct(qnn['accuracy'])}</td></tr>
@@ -172,34 +291,30 @@ def main():
   <p class="sub">QNN latency is classical simulation time on a CPU, not quantum hardware time.</p>
 </section>
 
+{study_html}
 <section id="limits">
-  <h2>5. Limitations</h2>
+  <h2>{5 + k}. Limitations</h2>
   <div class="note">
   <ul>
-    <li><b>The quantum circuit is not trained.</b> Quantum features are computed once and cached to disk, and the classifier trains on the cached tensor, so the loss never reaches the 24 circuit parameters. The QNN is therefore a <i>fixed random quantum feature</i> baseline. Its parameters are marked as frozen so the parameter count reflects this.</li>
-    <li><b>The two models are not capacity-matched.</b> The CNN's classifier receives 4,096 inputs (16 channels &times; 16&times;16); the QNN's receives 256 (4 channels pooled to 8&times;8). The CNN also trains for 15 epochs against 10. The accuracy gap cannot yet be attributed to the quantum layer.</li>
-    <li><b>One seed, one split.</b> No error bars yet, so small differences should not be read as real.</li>
-    <li><b>No validation set.</b> Epoch counts are fixed rather than tuned.</li>
+    {LIMITS}
   </ul>
   </div>
 </section>
 
 <section id="next">
-  <h2>6. Next steps</h2>
+  <h2>{6 + k}. Next steps</h2>
   <ol>
-    <li>Match capacity: same channel count and pooling into the classifier, same epoch budget for both models.</li>
-    <li>Train the circuit end-to-end (<code>QuanvNet(freeze_quantum=False)</code>) and compare against the fixed-circuit result.</li>
-    <li>Repeat over 5 seeds and report means with confidence intervals.</li>
-    <li>Train at the skewed ratio as well; focal loss only becomes relevant then.</li>
+    {NEXT}
   </ol>
 </section>
 
 <section id="repro">
-  <h2>7. Reproduce</h2>
+  <h2>{7 + k}. Reproduce</h2>
   <ul>
     <li><code>python main.py</code>: full run (G0 gate, both models, balanced and 1:10 evaluation, all figures). Console output of the reported run is in <code>outputs/run_log.txt</code>.</li>
     <li><code>python -m src.baseline_g0</code>: validity gate, old vs new negatives.</li>
     <li><code>python tests/test_pipeline.py</code> and <code>python tests/test_gate_g0.py</code>: checks that train, test and background sets never overlap, and that the gate catches known confounds.</li>
+    {REPRO_STUDY}
     <li><code>python make_presentation.py</code>: rebuilds this page from <code>outputs/</code>.</li>
   </ul>
 </section>

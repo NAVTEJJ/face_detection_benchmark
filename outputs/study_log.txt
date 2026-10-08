@@ -1,0 +1,28 @@
+torch circuit vs PennyLane: values 5.2e-07, gradients 3.0e-07
+Loading LFW faces...
+  LFW: 3023 face images -> resized to 32x32
+Loading CIFAR-10 negatives...
+  CIFAR-10 negatives: 3023 sampled from 60000 available
+    classes (10): airplane, automobile, bird, cat, deer, dog, frog, horse, ship, truck
+    per-class in train+test negatives: airplane=311, automobile=312, bird=295, cat=288, deer=283, dog=303, frog=284, horse=311, ship=317, truck=319
+    held-out pool for imbalanced eval: 6060 (disjoint)
+[    30s] seed 0 cnn_original        epoch 10 | acc 0.9901 auc 0.9994 | 1:10 prec 0.9343 AP 0.9959 FP   42 | 30.3s
+[    57s] seed 1 cnn_original        epoch 11 | acc 0.9934 auc 0.9998 | 1:10 prec 0.8811 AP 0.9950 FP   81 | 26.9s
+[    83s] seed 2 cnn_original        epoch 12 | acc 0.9934 auc 0.9999 | 1:10 prec 0.8590 AP 0.9961 FP   99 | 25.3s
+[   110s] seed 3 cnn_original        epoch 11 | acc 0.9909 auc 0.9997 | 1:10 prec 0.8937 AP 0.9951 FP   71 | 27.7s
+[   142s] seed 4 cnn_original        epoch 10 | acc 0.9884 auc 0.9993 | 1:10 prec 0.9127 AP 0.9936 FP   57 | 31.1s
+[   153s] seed 0 cnn_matched         epoch 12 | acc 0.9653 auc 0.9933 | 1:10 prec 0.7277 AP 0.9584 FP  220 | 11.6s
+[   165s] seed 1 cnn_matched         epoch 12 | acc 0.9802 auc 0.9979 | 1:10 prec 0.7877 AP 0.9742 FP  159 | 11.2s
+[   182s] seed 2 cnn_matched         epoch 12 | acc 0.9711 auc 0.9942 | 1:10 prec 0.6580 AP 0.9443 FP  304 | 17.3s
+[   203s] seed 3 cnn_matched         epoch 11 | acc 0.9669 auc 0.9963 | 1:10 prec 0.8050 AP 0.9605 FP  140 | 21.5s
+[   211s] seed 4 cnn_matched         epoch 12 | acc 0.9860 auc 0.9990 | 1:10 prec 0.8498 AP 0.9875 FP  105 | 7.9s
+[   215s] seed 0 cnn_matched_frozen  epoch 12 | acc 0.9603 auc 0.9922 | 1:10 prec 0.7068 AP 0.9516 FP  241 | 3.7s
+[   219s] seed 1 cnn_matched_frozen  epoch 12 | acc 0.9620 auc 0.9916 | 1:10 prec 0.7212 AP 0.9273 FP  223 | 4.0s
+[   223s] seed 2 cnn_matched_frozen  epoch 12 | acc 0.9570 auc 0.9908 | 1:10 prec 0.6467 AP 0.9201 FP  313 | 4.2s
+[   229s] seed 3 cnn_matched_frozen  epoch 12 | acc 0.9496 auc 0.9921 | 1:10 prec 0.6594 AP 0.9293 FP  297 | 5.5s
+[   233s] seed 4 cnn_matched_frozen  epoch 12 | acc 0.9810 auc 0.9983 | 1:10 prec 0.8445 AP 0.9844 FP  109 | 4.4s
+[   264s] seed 0 qnn_frozen          epoch 11 | acc 0.9545 auc 0.9938 | 1:10 prec 0.7062 AP 0.9609 FP  240 | 30.1s
+[   295s] seed 1 qnn_frozen          epoch 12 | acc 0.9554 auc 0.9913 | 1:10 prec 0.7454 AP 0.9438 FP  195 | 31.3s
+[   324s] seed 2 qnn_frozen          epoch 12 | acc 0.9719 auc 0.9970 | 1:10 prec 0.7571 AP 0.9636 FP  187 | 28.6s
+[   354s] seed 3 qnn_frozen          epoch 11 | acc 0.9694 auc 0.9958 | 1:10 prec 0.7568 AP 0.9779 FP  188 | 30.2s
+[   384s] seed 4 qnn_frozen          epoch 12 | acc 0.9570 auc 0.9894 | 1:10 prec 0.7431 AP 0.9449 FP  196 | 30.2s
