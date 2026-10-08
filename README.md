@@ -1,227 +1,342 @@
-# Face Detection Benchmark: Classical CNN vs. Quanvolutional QNN
-### Stage 1 of a One-Shot Face Recognition System
+# Face Detection Benchmark: Classical CNN vs Quanvolutional QNN
+
+Stage 1 of a one-shot face recognition system. The question is narrow: **if the first layer of a small face/non-face classifier is replaced by a 4-qubit quantum circuit (a "quanvolutional" layer), what changes?**
+
+Faces come from LFW, non-faces from CIFAR-10, and every image is a 32×32 grayscale patch. The quantum circuit runs on a classical simulator (PennyLane, plus an equivalent PyTorch implementation used for training).
+
+**Results page:** https://navtejj.github.io/face_detection_benchmark/PRESENTATION.html (also `PRESENTATION.html` and `PRESENTATION.pdf` in this repo, both work offline)
 
 ---
 
-**Results at a glance:** open `PRESENTATION.html` (single file, works offline) or `PRESENTATION.pdf`. Rebuild with `python make_presentation.py`.
+## Contents
+
+1. [Key findings](#1-key-findings)
+2. [Setup](#2-setup)
+3. [How to run](#3-how-to-run)
+4. [What each output file is](#4-what-each-output-file-is)
+5. [Repository layout](#5-repository-layout)
+6. [Method](#6-method)
+7. [Results in detail](#7-results-in-detail)
+8. [Implementation notes](#8-implementation-notes)
+9. [Limitations](#9-limitations)
+10. [Next steps](#10-next-steps)
+11. [Troubleshooting](#11-troubleshooting)
+12. [References](#12-references)
 
 ---
 
-## Quick Start
+## 1. Key findings
+
+1. **The benchmark is valid.** No single image statistic separates faces from non-faces: sharpness reaches AUC 0.54 and mean brightness 0.57, where 0.5 is chance. So the models are not just learning which dataset an image came from (section 6.4).
+2. **At a realistic class ratio the QNN falls apart.** With 10 background patches per face, the original QNN's precision drops from 0.963 to 0.586 (404 false alarms). The CNN goes from 0.998 to 0.957. ROC-AUC hides this, because it doesn't depend on class balance.
+3. **Once capacity is matched, most of the CNN–QNN gap disappears.** In the original comparison the CNN's classifier had 16× more inputs and trained for more epochs. A classical layer with exactly the quantum layer's shape, also left at random weights, performs the same as the random quantum layer over 5 seeds: the balanced-accuracy difference is −0.0003 ± 0.022.
+4. **Trained circuit:** results are being added. See section 7.3.
+
+---
+
+## 2. Setup
+
+**Requirements:** Python 3.10 or newer. A CPU is enough; no GPU and no quantum hardware are needed.
 
 ```bash
+git clone https://github.com/NAVTEJJ/face_detection_benchmark.git
 cd face_detection_benchmark
+
+python -m venv .venv
+# Windows:      .venv\Scripts\activate
+# macOS/Linux:  source .venv/bin/activate
+
 pip install -r requirements.txt
+```
+
+Tested with Python 3.11.8, torch 2.13.0 (CPU), PennyLane 0.45.1, scikit-learn 1.5.2, numpy 2.4.4, scipy 1.15.3 and matplotlib 3.10.8.
+
+**Data downloads automatically on the first run. There is nothing to fetch by hand.**
+
+| Dataset | Size | Saved to |
+|---|---|---|
+| LFW (funneled) | ~233 MB | `~/scikit_learn_data/lfw_home/` (by scikit-learn) |
+| CIFAR-10 (python version) | ~170 MB | `data/cache/` |
+
+Check that everything works before running anything long:
+
+```bash
+python tests/test_pipeline.py      # splits never overlap, 1:10 set built correctly
+python tests/test_gate_g0.py       # validity gate catches known confounds
+python tests/test_torch_quanv.py   # trainable circuit matches PennyLane (values + gradients)
+```
+
+Each should finish within a few seconds and end with `PASSED`.
+
+---
+
+## 3. How to run
+
+Run every command from the repository root. Timings are for a 4-core laptop CPU, after the data has downloaded.
+
+### Step 1: single benchmark run (about 2–3 minutes)
+
+```bash
 python main.py
 ```
 
-First run downloads LFW (~200 MB, cached to `~/scikit_learn_data`) and CIFAR-10 (~170 MB, cached to `data/cache/`). The quanvolutional feature maps are computed once and cached to `data/cache/quanv_features_*.pt` — subsequent runs skip this and load from disk.
+In order, this:
+1. loads LFW faces and CIFAR-10 non-faces (1:1), and splits them 80/20 with seed 42
+2. runs **Gate G0**, the dataset validity check
+3. trains the original CNN and the QNN, with the quantum circuit frozen at random weights
+4. evaluates both on the balanced test set **and** on a 1:10 set (faces vs held-out background)
+5. writes every figure, `outputs/metrics.json` and the console log to `outputs/`
 
-All outputs land in `outputs/`.
+### Step 2: validity gate, old vs new negatives (under a minute)
+
+```bash
+python -m src.baseline_g0
+```
+
+Compares the original 4-class non-face set (airplane, car, ship, truck) with all 10 CIFAR classes. Writes `outputs/gate_g0.json`.
+
+### Step 3: controlled 5-seed study (about 40 minutes)
+
+```bash
+python study.py                 # trains 5 models x 5 seeds
+python -m src.study_report      # mean ± 95% CI, paired comparisons, figure
+```
+
+This is the fair comparison (section 6.3). The runs take roughly 30 s each for the classical models and the frozen QNN, and about 6 min each for the trained quantum circuit. Progress is saved after every run, so if it stops, run it again and it skips what's already finished.
+
+### Step 4: rebuild figures and the results page (seconds)
+
+```bash
+python -m src.plots_findings    # validity-gate and 1:10 figures
+python make_presentation.py     # PRESENTATION.html, built from outputs/
+```
+
+For the PDF, open `PRESENTATION.html` in a browser and print to PDF.
+
+### Optional: notebook
+
+```bash
+jupyter notebook notebooks/face_detection_benchmark.ipynb
+```
+
+This walks through the single run (step 1) cell by cell.
 
 ---
 
-## Project Structure
+## 4. What each output file is
+
+| File | Made by | Contents |
+|---|---|---|
+| `outputs/run_log.txt` | `main.py` | Full console output of the reported single run |
+| `outputs/metrics.json` | `main.py` | Single-run metrics: G0, balanced, 1:10 |
+| `outputs/gate_g0.json` | `src.baseline_g0` | Validity gate, old vs new negatives |
+| `outputs/study_runs.jsonl` | `study.py` | One line per (seed, model) with all metrics |
+| `outputs/study_log.txt` | `study.py` | Console output of the study |
+| `outputs/study_summary.json` | `src.study_report` | Means, 95% CIs, paired differences, p-values |
+| `outputs/fig_gate_g0.png` | `src.plots_findings` | Validity gate figure |
+| `outputs/fig_imbalance.png` | `src.plots_findings` | Precision and ROC-AUC, balanced vs 1:10 |
+| `outputs/fig_study.png` | `src.study_report` | All study models with confidence intervals |
+| `outputs/roc_curves.png`, `confusion_matrices.png`, `training_curves.png`, `comparison_table.png`, `misclassified.png`, `class_balance.png` | `main.py` | Single-run figures |
+| `PRESENTATION.html` / `.pdf` | `make_presentation.py` | Everything above on one page |
+
+---
+
+## 5. Repository layout
 
 ```
 face_detection_benchmark/
+├── main.py                     single benchmark run
+├── study.py                    controlled 5-seed study
+├── make_presentation.py        builds PRESENTATION.html from outputs/
+├── PRESENTATION.html / .pdf    results page
+├── requirements.txt
 ├── src/
-│   ├── cifar.py               ← CIFAR-10 reader (no torchvision dependency)
-│   ├── baseline_g0.py         ← trivial-baseline separability gate
-│   ├── config.py              ← every hyperparameter lives here
-│   ├── dataset.py             ← LFW + CIFAR-10 loading, balancing, splitting
-│   ├── plots.py               ← ROC, confusion, error grid, and block diagram
-│   ├── plots_findings.py      ← G0 and 1:10 figures, read from outputs/
-│   ├── models/                ← Model architectures
-│   │   ├── classical_12net.py ← Classical 12-Net CNN
-│   │   └── quanv_12net.py     ← Quanvolutional QNN
-│   └── benchmark/             ← Training and evaluation engines
-│       ├── trainer.py         ← training loops
-│       └── evaluator.py       ← metrics and latency tests
+│   ├── config.py               every setting (seeds, epochs, ratios, circuit shape)
+│   ├── dataset.py              LFW + CIFAR loading, splits, held-out 1:10 pool
+│   ├── cifar.py                CIFAR-10 reader (no torchvision needed)
+│   ├── baseline_g0.py          validity gate
+│   ├── plots.py                single-run figures
+│   ├── plots_findings.py       gate and 1:10 figures
+│   ├── study_report.py         study statistics and figure
+│   ├── models/
+│   │   ├── classical_12net.py  original CNN
+│   │   ├── quanv_12net.py      QNN on PennyLane (frozen circuit, cached features)
+│   │   └── torch_quanv.py      same circuit in PyTorch, trainable, checked vs PennyLane
+│   └── benchmark/
+│       ├── trainer.py          training loops for main.py
+│       └── evaluator.py        metrics, 1:10 evaluation, latency
 ├── tests/
-│   ├── test_pipeline.py       ← split disjointness + imbalance ratio
-│   └── test_gate_g0.py        ← G0 known-answer self-test
-├── notebooks/
-│   └── face_detection_benchmark.ipynb ← interactive notebook
-├── main.py                    ← end-to-end CLI runner
-├── make_presentation.py       ← builds PRESENTATION.html from outputs/
-├── PRESENTATION.html          ← one-file results page
-├── requirements.txt           ← pinned project dependencies
-├── data/cache/                ← where LFW and CIFAR datasets are cached
-└── outputs/                   ← tables, curves, run_log.txt, gate_g0.json
+│   ├── test_pipeline.py
+│   ├── test_gate_g0.py
+│   └── test_torch_quanv.py
+├── notebooks/face_detection_benchmark.ipynb
+├── outputs/                    all results and figures (committed)
+└── data/cache/                 downloaded CIFAR-10 and feature cache (not committed)
 ```
 
 ---
 
-## Dataset Details
+## 6. Method
 
-| Source | Role | Classes Used | Preprocessing |
-|--------|------|-------------|---------------|
-| LFW (`fetch_lfw_people`) | Positive (Face) | All identities with ≥20 photos — 62 people, 3,023 images | Resize to 32×32 grayscale, normalize to [0,1] |
-| CIFAR-10 | Negative (Non-Face) | All 10 classes | BT.601 grayscale, already 32×32 |
+### 6.1 Data
 
-Class balance enforced 1:1 (3,023 / 3,023). 80/20 stratified split, `random_state=42`. A further 6,040 CIFAR images are held out of both splits as the background pool for the imbalanced evaluation.
+| | Source | Count | Preprocessing |
+|---|---|---|---|
+| Faces | LFW, people with ≥ 20 photos | 62 people, 3,023 images | grayscale, resized to 32×32, scaled to [0, 1] |
+| Non-faces | CIFAR-10, all 10 classes | 3,023 (matched 1:1) | BT.601 grayscale, already 32×32 |
+| 1:10 background pool | CIFAR-10 | 6,050 | in neither the training nor the test split |
 
-CIFAR-10 is read directly from its pickled batches by `src/cifar.py`. `torchvision.datasets` would do the same job, but torchvision's compiled extension is pinned to a specific torch build and raises `operator torchvision::nms does not exist` at import time on a mismatch, which has nothing to do with this project.
+Split: 80% train / 20% test, stratified. In the study, 10% of the training part is also held out as a validation set.
 
-**Why all ten negative classes, not four.** The original set was airplane/automobile/ship/truck: four rigid man-made categories with no animals, no fur or skin texture, and no centred subjects. Adding the six animal classes puts eyes, texture and centred blob structure on the negative side, so the model has to do face modelling rather than category discrimination. Measured effect on the trivial-baseline gate below: sharpness AUC 0.658 → 0.543, Cohen's d 0.63 → 0.29.
+### 6.2 Models
 
-LFW was chosen over CBCL specifically because its multi-photo-per-identity structure supports Phase 2's triplet loss training. Same dataset, zero rework between phases.
+**The quantum circuit** works on each 2×2 patch, stride 2:
+- encoding: pixel value *x* → `RY(πx)` on one of 4 qubits
+- 2 layers, each with `RX`, `RY`, `RZ` on every qubit, then a ring of CNOTs (0→1→2→3→0)
+- readout: Pauli-Z expectation on each qubit, giving 4 feature maps of 16×16
+- 24 circuit parameters, circuit depth 15
+
+Every model below then uses **max-pool → dense 16 → dense 2**.
+
+| Model | Front end | Trainable params | Used in |
+|---|---|---|---|
+| CNN, original | 3×3 conv, 16 channels (head gets 4,096 inputs) | 65,746 | `main.py`, study |
+| CNN, matched | 2×2 conv, stride 2, 4 channels, tanh | 4,166 | study |
+| CNN, matched, frozen | same conv, left at random init | 4,146 | study |
+| QNN, frozen | quantum circuit, left at random init | 4,146 | `main.py`, study |
+| QNN, trained | quantum circuit, trained end-to-end | 4,170 | study |
+
+The **matched CNN** has the same shape as the quantum layer: one output per 2×2 patch per channel, 4 channels, with outputs kept in [−1, 1] like a Pauli-Z expectation. The **frozen** versions answer the question "is a random quantum projection better than a random classical one?"
+
+### 6.3 Training
+
+| | `main.py` (single run) | `study.py` (controlled) |
+|---|---|---|
+| Optimiser | Adam, lr 1e-3, batch 64 | Adam, lr 1e-3, batch 64 |
+| Epochs | CNN 15, QNN 10 | 12 for every model |
+| Epoch chosen by | last epoch | lowest validation loss |
+| Seeds | 1 (42) | 5 (0–4), each a different split and init |
+| Quantum circuit | frozen | frozen and trained versions |
+
+### 6.4 Evaluation
+
+- **Gate G0 (validity):** before training, three deliberately trivial baselines are run: Laplacian variance (sharpness), mean brightness, and logistic regression on raw pixels. If one number per image can separate the classes (AUC ≥ 0.90), the benchmark is measuring the dataset source, not faces. Only the single-number cues decide pass/fail, because a real task can be linearly separable in pixel space; `tests/test_gate_g0.py` shows this.
+- **Balanced test (1:1):** accuracy, precision, recall, F1, ROC-AUC.
+- **Deployment ratio (1:10):** every test face plus 10× as many background images that were never used in training. Reported: precision, recall, F1, ROC-AUC, **average precision** and false positives. Precision and average precision change with the class ratio; ROC-AUC doesn't, which is why ROC-AUC alone can't be the headline for a detector.
+- **Study statistics:** mean ± 95% t-interval over 5 seeds. Models are compared **paired** on the same splits; "no clear difference" means the 95% interval of the paired difference includes zero.
 
 ---
 
-## Gate G0: is the split separable without modelling faces?
+## 7. Results in detail
 
-When positives and negatives come from different sources they differ in focus, compression and framing, so a classifier can score well by learning *which dataset an image came from*. `src/baseline_g0.py` runs three deliberately stupid baselines before any training: variance of the Laplacian (one scalar), mean intensity (one scalar), and logistic regression on the raw 1,024 pixels.
+### 7.1 Validity gate
 
-| Baseline | Old negatives (4 classes) | All 10 classes |
+| Single-number cue | Old negatives (4 vehicle classes) | All 10 classes |
 |---|---|---|
-| Sharpness (Laplacian variance) | AUC 0.658, d = 0.63 | **AUC 0.543, d = 0.29** |
-| Mean intensity | AUC 0.502 | AUC 0.566 |
-| Raw-pixel logistic | AUC 0.991 | AUC 0.993 |
+| Sharpness (Laplacian variance) | AUC 0.658, Cohen's d 0.63 | **AUC 0.543, d 0.29** |
+| Mean brightness | AUC 0.502 | AUC 0.566 |
+| Raw-pixel logistic (not gated) | AUC 0.991 | AUC 0.993 |
 | **Verdict** | PASS | **PASS** |
 
-Both configurations pass. The four-class split was *not* badly confounded, contrary to what a blur-confound in a related project suggested it might be — widening the negatives improved the sharpness margin but did not rescue a broken benchmark, because it was not broken.
+### 7.2 Single run (`main.py`, seed 42, original models)
 
-Only the scalar cues decide the verdict. A high raw-pixel score is expected and is not evidence of a confound: `tests/test_gate_g0.py` constructs two classes with identical sharpness and identical mean intensity that differ only in spatial arrangement, where the pixel model reaches AUC 1.000 while both scalars sit at chance. Gating on the pixel number would reject a perfectly good task.
-
----
-
-## Architecture
-
-The intent is that only the first feature-extraction layer differs. In the code as written it does not — see the capacity note below the diagram.
-
-```
-Classical 12-Net:
-  Conv2d(1→16, 3×3) → ReLU → MaxPool(3×3, s=2) → Flatten → Linear(4096→16) → ReLU → Linear(16→2)
-
-Quanv 12-Net:
-  Quanv(4q, 2×2) → (MaxPool) → Flatten → Linear(256→16) → ReLU → Linear(16→2)
-  ↑ this one layer is the entire experiment
-```
-
-**Quantum circuit:** RY angle encoding → 2-layer ring ansatz (RX+RY+RZ per qubit + CNOT ring) → Pauli-Z measurement per qubit. 24 circuit parameters total.
-
-**Those 24 parameters are frozen, not trained.** Features are computed once in `precompute_features()` and cached to disk; training then runs through `forward_from_features()`, which takes the cached tensor as a leaf input. The loss never reaches `q_layer.weights`, so its `.grad` stays `None` and Adam skips it. This was already true before the parameters were marked `requires_grad=False` — the only thing that changed is that `count_parameters()` stopped reporting 24 trained parameters that never moved (4,170 → 4,146).
-
-So the quantum layer is a **fixed random projection**, and the QNN arm is a random-feature baseline. That is a legitimate thing to measure, but it has to be described as one: no claim about *learned* or *variational* quantum features is supported by this code as it stands. Pass `QuanvNet(freeze_quantum=False)` and train through `forward()` to actually optimise the circuit, bypassing the cache.
-
-**The two arms are not capacity-matched.** Only the first layer is described as differing, but the CNN emits 16 channels at 16×16 (flatten 4,096) while the QNN emits 4 channels that are pooled to 8×8 (flatten 256), and the CNN trains for 15 epochs against the QNN's 10. The classical classifier head therefore has 16× the input width and 50% more training. The accuracy gap cannot be attributed to the quantum layer until those are equalised.
-
----
-
-## Results
-
-### Balanced test set (1:1, n = 1,210)
-
-| Metric                         | Classical 12-Net CNN | Quanvolutional QNN |
-|--------------------------------|----------------------|--------------------|
-| Test Accuracy                  | 0.9917               | 0.9545             |
-| Precision                      | 0.9983               | 0.9630             |
-| Recall                         | 0.9851               | 0.9455             |
-| F1-Score                       | 0.9917               | 0.9541             |
-| ROC-AUC                        | 0.9999               | 0.9891             |
-| Total Trainable Params         | 65,746               | 4,146              |
-| Quantum Params (frozen)        | --                   | 24                 |
-| Qubit Count                    | --                   | 4                  |
-| Circuit Depth                  | --                   | 15                 |
-| Inference Latency / patch (ms) | 0.76                 | 15.39 +/- 3.23     |
-| Inference / full 32x32 (ms)    | 0.76                 | 3939.84            |
-
-### Imbalanced test set (1:10, 604 faces / 6,040 background)
-
-Background drawn from a CIFAR pool held out of both train and test, so none of it was seen during training.
-
-| Metric | Classical CNN | Quanvolutional QNN |
+| | CNN, original | QNN, frozen |
 |---|---|---|
-| Precision | 0.9566 (−0.042) | **0.5856 (−0.377)** |
-| Recall | 0.9851 | 0.9454 |
-| F1 | 0.9706 (−0.021) | 0.7232 (−0.231) |
-| ROC-AUC | 0.9996 | 0.9840 |
-| Average Precision | 0.9962 | 0.9202 |
-| False positives | 27 (FPR 0.0045) | 404 (FPR 0.0669) |
+| Balanced accuracy | 0.992 | 0.955 |
+| Balanced ROC-AUC | 1.000 | 0.989 |
+| Precision, 1:1 → 1:10 | 0.998 → 0.957 | 0.963 → **0.586** |
+| Average precision at 1:10 | 0.996 | 0.920 |
+| False positives at 1:10 | 27 | **404** |
+| Trainable parameters | 65,746 | 4,146 (+24 frozen) |
 
-**This is the result that matters, and the balanced table hides it.** Moving to the deployment ratio costs the CNN 4 points of precision and the QNN 38. ROC-AUC barely moves for either model (0.9891 → 0.9840 for the QNN) because ROC-AUC is invariant to class balance — which is exactly why it should not be a headline number for a detector. Average precision, which is not invariant, drops 0.989 → 0.920.
+This run is **not** a fair comparison: the CNN has a 16× larger head and more epochs, and there is only one seed. Section 7.3 is the fair version.
 
-The QNN's 6.7% false-positive rate is tolerable at 1:1 and produces 404 false alarms at 1:10. In a real sliding window with thousands of background patches per image, it would be unusable at this threshold.
+### 7.3 Controlled study (5 seeds, mean ± 95% CI)
 
-All evaluation plots (ROC curves, confusion matrices, training histories, misclassification examples, and comparison tables) are generated and saved under the `outputs/` directory. Full console output is in `outputs/run_log.txt`; gate numbers in `outputs/gate_g0.json`.
+| Model | Params | Balanced acc. | ROC-AUC | 1:10 precision | 1:10 avg. precision | 1:10 false pos. |
+|---|---|---|---|---|---|---|
+| CNN, original | 65,746 | 0.991 ± 0.003 | 1.000 ± 0.000 | 0.896 ± 0.036 | 0.995 ± 0.001 | 70 ± 27 |
+| CNN, matched | 4,166 | 0.974 ± 0.011 | 0.996 ± 0.003 | 0.766 ± 0.092 | 0.965 ± 0.020 | 186 ± 97 |
+| CNN, matched, frozen | 4,146 | 0.962 ± 0.014 | 0.993 ± 0.004 | 0.716 ± 0.097 | 0.943 ± 0.033 | 237 ± 100 |
+| QNN, frozen | 4,146 | 0.962 ± 0.010 | 0.993 ± 0.004 | 0.742 ± 0.026 | 0.958 ± 0.018 | 201 ± 27 |
+| QNN, trained | 4,170 | *running* | | | | |
 
----
+**Paired comparisons** (difference = first minus second):
 
-## Engineering Rationale
+| Question | Balanced acc. | 1:10 precision | 1:10 avg. precision |
+|---|---|---|---|
+| Random quantum vs random classical features | −0.000 ± 0.022 | +0.026 ± 0.106 | +0.016 ± 0.044 |
+| Trained quantum vs trained classical layer | *running* | | |
+| Does training the circuit help? | *running* | | |
 
-**Why 12-net, not ResNet/MobileNet:**
-The point of Stage 1 is measuring what one conv→quanv swap does, not maximising accuracy. A deep network's many layers would drown out the quantum layer's signal. The 12-net is small enough that the first layer's contribution is measurable — and it's a real published architecture, not a toy.
-
-**Why quanvolution, not a generic VQC:**
-A bolt-on quantum layer at the end of a classical feature extractor is addition, not conversion. Quanvolution replaces the conv layer structurally — same architecture, one layer swapped — so the comparison table is measuring one variable.
-
-**Why LFW + CIFAR-10, not CBCL:**
-CBCL has no per-identity structure. It works for binary detection but dead-ends at Phase 2. LFW's multi-photo-per-identity hierarchy is the specific property that makes triplet-loss embedding training possible without collecting new data.
-
----
-
-## Phase 1–4 Roadmap
-
-| Phase | Goal | Key Change from Previous |
-|-------|------|--------------------------|
-| **1 (this)** | Conv↔quanv detection benchmark | — |
-| **2** | Triplet-loss embedding, one-shot verification | Swap softmax head for 128-d embedding; triplet loss; cosine threshold |
-| **3** | Qubit scaling analysis | Formal qubit allocation model as image/dataset size grows |
-| **4** | Hybrid deployment at scale | QNN moves to end-stage on compressed embeddings, not raw patches |
-
-Phases 1→2 is a head swap, not a rebuild. The same backbone carries forward.
+All three comparisons, with p-values, are in `outputs/study_summary.json`.
 
 ---
 
-## Controlled study (5 seeds)
+## 8. Implementation notes
 
-The single run above compares models that differ in more than the quantum layer. `study.py` fixes that:
+- **The QNN in `main.py` has a frozen circuit.** Its features are computed once and cached, and the classifier trains on that cached tensor, so no gradient ever reaches the 24 circuit parameters. They are marked `requires_grad=False` so the parameter count is honest (4,146 trainable, not 4,170). The trained version is in `study.py`.
+- **Trainable circuit (`src/models/torch_quanv.py`).** The same circuit is written as a 4-qubit statevector in plain PyTorch, so autograd reaches the circuit weights. It matches PennyLane to about 5×10⁻⁷ in value and 3×10⁻⁷ in gradient, compared against PennyLane's parameter-shift rule (`tests/test_torch_quanv.py`).
+- **Fast quantum features.** `quanv_12net.py` evaluates every patch in one vectorised PennyLane call (parameter broadcasting) instead of rebuilding the circuit 256 times per image. It's about 175× faster, and on every cache miss it is checked against the per-patch version; it refuses to cache if they differ by more than 10⁻⁶.
+- **Safe feature cache.** Cached features are keyed by a hash of the exact pixels, circuit weights and circuit shape, so changing the data or circuit can never reload stale features.
+- **No torchvision.** CIFAR-10 is read straight from its pickled batches (`src/cifar.py`), which avoids torchvision/torch version mismatches.
+- **The name "12-Net"** in the file names refers to the CNN cascade of Li et al. (2015), which uses 12×12 inputs. The networks here take 32×32 inputs and are 12-Net-*style*.
 
-- **Matched CNN** with the QNN's exact shape: 2×2 conv, stride 2, 4 channels, tanh, then the same pool and the same 256 → 16 → 2 head (20 front-end parameters vs the circuit's 24).
-- **Classical random baseline**: the same conv left at its random init, the fair opponent for the frozen circuit.
-- **Trained circuit**: `src/models/torch_quanv.py` re-implements the circuit as a PyTorch statevector so gradients reach it. Checked against PennyLane to ~5e-7 in value and ~3e-7 in gradient vs parameter-shift (`tests/test_torch_quanv.py`).
-- **Same training for every model**: Adam 1e-3, batch 64, 12 epochs, best epoch by validation loss on a 10% split.
-- **5 seeds**, each a different split and init; mean ± 95% CI, plus paired seed-by-seed differences.
+---
 
-Results: `outputs/study_summary.json`, `outputs/fig_study.png`, and section 5 of `PRESENTATION.html`.
+## 9. Limitations
 
-So far the clearest result is that random quantum features and random classical features of the same shape perform the same (paired balanced-accuracy difference −0.0003 ± 0.022). Most of the CNN–QNN gap in the single run came from the CNN's 16× larger classifier head.
+- **Simulated, noiseless circuit.** All quantum results are exact simulation on a CPU. Real hardware noise could only make the QNN numbers worse.
+- **Small circuit:** 4 qubits, 2 layers, 24 parameters. Nothing here says how larger circuits behave.
+- **Balanced training only.** Every model trains at 1:1 and is only tested at 1:10.
+- **Patch classification, not full detection.** Each 32×32 patch is classified on its own; there is no sliding-window detection over whole images yet.
+- **Faces vs CIFAR objects.** Negatives are natural-object thumbnails, not background crops from the same photos as the faces.
+- **12 epochs.** Several models pick their last epoch, which means they are still improving. With a fixed budget, the comparison partly reflects learning speed.
 
+---
+
+## 10. Next steps
+
+1. Train at the skewed ratio and compare plain cross-entropy with focal loss.
+2. Add depolarising noise to the circuit to see how much of the QNN result survives on realistic hardware.
+3. Scale the circuit (more layers, larger patches), with the matched classical layer scaled alongside it.
+4. Run as a sliding-window detector on full images (e.g. WIDER FACE) and report average precision.
+5. Longer training with early stopping, so no model is cut off while still improving.
+
+---
+
+## 11. Troubleshooting
+
+**`RuntimeError: operator torchvision::nms does not exist`**
+torchvision was built for a different torch version. This project doesn't need torchvision, so either `pip uninstall torchvision` or make sure nothing imports it.
+
+**LFW loads fewer than 3,023 faces (e.g. 2,537)**
+An earlier download was interrupted, and scikit-learn reuses the half-extracted folder. Delete it and run again:
 ```bash
-python study.py                 # resumable; appends to outputs/study_runs.jsonl
-python -m src.study_report      # summary json + figure
-python make_presentation.py     # rebuild the results page
-python tests/test_torch_quanv.py
+# macOS/Linux
+rm -rf ~/scikit_learn_data/lfw_home/lfw_funneled ~/scikit_learn_data/lfw_home/joblib
+# Windows (PowerShell)
+Remove-Item -Recurse -Force "$env:USERPROFILE\scikit_learn_data\lfw_home\lfw_funneled", "$env:USERPROFILE\scikit_learn_data\lfw_home\joblib"
 ```
+A complete LFW has 5,749 people and 13,233 images.
+
+**LFW download is very slow or fails**
+The archive is about 233 MB from figshare. If the download stops partway, delete `~/scikit_learn_data/lfw_home/lfw-funneled.tgz` and rerun.
+
+**`study.py` was interrupted**
+Run it again. Finished (seed, model) pairs are read from `outputs/study_runs.jsonl` and skipped. To start over, delete that file.
+
+**Results differ slightly from the tables**
+Training on CPU is seeded but can vary in the last decimal place across machines and library versions. The study's confidence intervals are the numbers to compare.
 
 ---
 
-## Known Limitations
+## 12. References
 
-- **Single seed, single split.** Every number here comes from one run with `random_state=42`. There are no error bars, so the CNN-QNN gap has no variance estimate attached and small differences should not be read as real.
-- **No validation set.** The 80/20 split is train/test only; epoch counts are fixed rather than selected, and the test set is the only holdout.
-- **The quantum layer is frozen** (see Architecture). The QNN arm measures a random quantum projection, not a trained variational circuit.
-- **The arms are not capacity-matched** (see Architecture). Head width and epoch budget both differ.
-- `default.qubit` simulation is 100–1000× slower than actual NISQ hardware. Latency numbers reflect simulation overhead, not physical circuit execution time.
-- LFW at `min_faces=20` yields 3,023 face images from 62 identities — small by production standards, appropriate for a simulator-constrained benchmark.
-- 4-qubit, 2-layer ansatz may hit barren plateaus with more qubits/depth; gradient norms should be monitored in Phase 3's scaling analysis.
-
----
-
-## Performance note
-
-`quanvolve()` evaluates the circuit once per 2×2 patch, rebuilding the PennyLane tape 256 times per image, which dominates runtime. `_run_batched()` instead uses PennyLane's parameter broadcasting to push every patch through one vectorised statevector simulation: **~175× faster**, and validated against the per-patch reference on every cache miss (max abs diff 2.4e-7, below the 1e-6 threshold at which `precompute_features()` refuses to write the cache). The full 6,644-image imbalanced set takes 44s instead of a projected ~2 hours.
-
-The feature cache is keyed by a SHA-256 of the exact pixels, the circuit weights and the circuit geometry. Keying on filename alone meant that changing the negative class set, the split seed or the ansatz silently reloaded stale features against new labels.
-
----
-
-## Tests
-
-```bash
-python tests/test_pipeline.py   # split disjointness, imbalance ratio, held-out background
-python tests/test_gate_g0.py    # G0 fires on known confounds, stays quiet on a clean task
-python tests/test_torch_quanv.py  # trainable circuit matches PennyLane, values and gradients
-```
+- G. B. Huang, M. Ramesh, T. Berg, E. Learned-Miller. *Labeled Faces in the Wild: A Database for Studying Face Recognition in Unconstrained Environments.* UMass Amherst Tech. Report 07-49, 2007.
+- A. Krizhevsky. *Learning Multiple Layers of Features from Tiny Images.* Tech. report, University of Toronto, 2009.
+- M. Henderson, S. Shakya, S. Pradhan, T. Cook. *Quanvolutional neural networks: powering image recognition with quantum circuits.* Quantum Machine Intelligence 2, 2020.
+- V. Bergholm et al. *PennyLane: Automatic differentiation of hybrid quantum-classical computations.* arXiv:1811.04968, 2018.
+- H. Li, Z. Lin, X. Shen, J. Brandt, G. Hua. *A Convolutional Neural Network Cascade for Face Detection.* CVPR 2015.
+- H. A. Rowley, S. Baluja, T. Kanade. *Neural Network-Based Face Detection.* IEEE TPAMI 20(1), 1998.
+- T.-Y. Lin, P. Goyal, R. Girshick, K. He, P. Dollár. *Focal Loss for Dense Object Detection.* ICCV 2017.
