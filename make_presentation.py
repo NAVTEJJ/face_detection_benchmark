@@ -69,6 +69,22 @@ def study_section(st, fig):
                     + "".join(cells) + "</tr>")
 
     has_trained = "qnn_trained" in st["arms"]
+    bottom = ""
+    cs = {(c["a"], c["b"]): c for c in st["contrasts"]}
+    if has_trained and all(k in cs for k in [("qnn_frozen", "cnn_matched_frozen"), ("qnn_trained", "cnn_matched"), ("qnn_trained", "qnn_frozen")]):
+        def says(c):
+            return _verdict(c["balanced.accuracy"]), _verdict(c["imbalanced.precision"])
+        rand, trained, helps = (says(cs[k]) for k in [("qnn_frozen", "cnn_matched_frozen"), ("qnn_trained", "cnn_matched"), ("qnn_trained", "qnn_frozen")])
+        same = lambda v: all(x == "no clear difference" for x in v)
+        lines = [
+            "Random quantum features vs random classical features of the same shape: " + ("no clear difference." if same(rand) else f"accuracy {rand[0]}, 1:10 precision {rand[1]}."),
+            "Trained quantum layer vs trained classical layer of the same shape: " + ("no clear difference." if same(trained) else f"accuracy {trained[0]}, 1:10 precision {trained[1]}."),
+            "Training the circuit vs leaving it random: " + ("helps on both accuracy and 1:10 precision." if helps == ("first is higher", "first is higher") else f"accuracy {helps[0]}, 1:10 precision {helps[1]}."),
+        ]
+        if same(rand) and same(trained):
+            lines.append("So on this task the 4-qubit layer behaves like a classical layer with the same number of outputs. "
+                         "The large gap in the single run came from the original CNN's much bigger classifier head, not from the quantum layer.")
+        bottom = '<div class="note"><b>Bottom line.</b><ul>' + "".join(f"<li>{x}</li>" for x in lines) + "</ul></div>"
     title = "matched capacity, trained circuit" if has_trained else "matched capacity (trained-circuit runs in progress)"
     pending = "" if has_trained else (
         "<p class=\"note\"><b>In progress:</b> the trained-circuit model (5 more runs, about 5 minutes each on a CPU) "
@@ -99,6 +115,7 @@ def study_section(st, fig):
     {"".join(crow)}
   </table></div>
   <p class="sub">"No clear difference" means the 95% interval of the paired difference includes zero.</p>
+  {bottom}
 </section>
 """
 

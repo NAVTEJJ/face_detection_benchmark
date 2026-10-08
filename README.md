@@ -30,7 +30,10 @@ Faces come from LFW, non-faces from CIFAR-10, and every image is a 32×32 graysc
 1. **The benchmark is valid.** No single image statistic separates faces from non-faces: sharpness reaches AUC 0.54 and mean brightness 0.57, where 0.5 is chance. So the models are not just learning which dataset an image came from (section 6.4).
 2. **At a realistic class ratio the QNN falls apart.** With 10 background patches per face, the original QNN's precision drops from 0.963 to 0.586 (404 false alarms). The CNN goes from 0.998 to 0.957. ROC-AUC hides this, because it doesn't depend on class balance.
 3. **Once capacity is matched, most of the CNN–QNN gap disappears.** In the original comparison the CNN's classifier had 16× more inputs and trained for more epochs. A classical layer with exactly the quantum layer's shape, also left at random weights, performs the same as the random quantum layer over 5 seeds: the balanced-accuracy difference is −0.0003 ± 0.022.
-4. **Trained circuit:** results are being added. See section 7.3.
+4. **A trained quantum layer is no better than a trained classical layer of the same shape** (balanced accuracy +0.001 ± 0.009, 1:10 precision +0.032 ± 0.064, both inside zero).
+5. **Training the circuit does help it.** Compared with the frozen circuit on the same splits, accuracy rises by 0.013 ± 0.009 (p = 0.015) and 1:10 precision by 0.056 ± 0.043 (p = 0.022). That is about the same gain training gives the classical layer (0.962 → 0.974).
+
+**Bottom line:** on this task, a 4-qubit quanvolutional layer behaves like a classical layer with the same number of outputs, trained or not. There is no quantum advantage here, and the large gap in the original comparison came from the classical model's much bigger classifier head.
 
 ---
 
@@ -259,17 +262,17 @@ This run is **not** a fair comparison: the CNN has a 16× larger head and more e
 | CNN, matched | 4,166 | 0.974 ± 0.011 | 0.996 ± 0.003 | 0.766 ± 0.092 | 0.965 ± 0.020 | 186 ± 97 |
 | CNN, matched, frozen | 4,146 | 0.962 ± 0.014 | 0.993 ± 0.004 | 0.716 ± 0.097 | 0.943 ± 0.033 | 237 ± 100 |
 | QNN, frozen | 4,146 | 0.962 ± 0.010 | 0.993 ± 0.004 | 0.742 ± 0.026 | 0.958 ± 0.018 | 201 ± 27 |
-| QNN, trained | 4,170 | *running* | | | | |
+| QNN, trained | 4,170 | 0.975 ± 0.006 | 0.997 ± 0.000 | 0.798 ± 0.032 | 0.976 ± 0.005 | 149 ± 30 |
 
 **Paired comparisons** (difference = first minus second):
 
 | Question | Balanced acc. | 1:10 precision | 1:10 avg. precision |
 |---|---|---|---|
 | Random quantum vs random classical features | −0.000 ± 0.022 | +0.026 ± 0.106 | +0.016 ± 0.044 |
-| Trained quantum vs trained classical layer | *running* | | |
-| Does training the circuit help? | *running* | | |
+| Trained quantum vs trained classical layer | +0.001 ± 0.009 | +0.032 ± 0.064 | +0.011 ± 0.021 |
+| Trained circuit vs frozen circuit | **+0.013 ± 0.009** | **+0.056 ± 0.043** | **+0.018 ± 0.016** |
 
-All three comparisons, with p-values, are in `outputs/study_summary.json`.
+Only the last comparison excludes zero: training the circuit helps it, but a trained circuit is still no better than a trained classical layer of the same shape. In the trained runs the circuit parameters moved by up to 0.47 rad, so the gradients really do reach the circuit. All comparisons, with p-values, are in `outputs/study_summary.json`.
 
 ---
 
