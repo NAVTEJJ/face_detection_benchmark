@@ -43,6 +43,36 @@ def _verdict(d):
     return "first is higher" if d["mean_diff"] > 0 else "first is lower"
 
 
+def bottom_lines(st):
+    """Plain-language conclusions, derived from the paired-comparison verdicts."""
+    if not st or "qnn_trained" not in st["arms"]:
+        return []
+    cs = {(c["a"], c["b"]): c for c in st["contrasts"]}
+    keys = [("qnn_frozen", "cnn_matched_frozen"), ("qnn_trained", "cnn_matched"), ("qnn_trained", "qnn_frozen")]
+    if not all(k in cs for k in keys):
+        return []
+
+    def says(c):
+        return _verdict(c["balanced.accuracy"]), _verdict(c["imbalanced.precision"])
+
+    rand, trained, helps = (says(cs[k]) for k in keys)
+    same = lambda v: all(x == "no clear difference" for x in v)
+    lines = [
+        "Random quantum features vs random classical features of the same shape: "
+        + ("no clear difference." if same(rand) else f"accuracy {rand[0]}, 1:10 precision {rand[1]}."),
+        "Trained quantum layer vs trained classical layer of the same shape: "
+        + ("no clear difference." if same(trained) else f"accuracy {trained[0]}, 1:10 precision {trained[1]}."),
+        "Training the circuit vs leaving it random: "
+        + ("helps on both accuracy and 1:10 precision." if helps == ("first is higher", "first is higher")
+           else f"accuracy {helps[0]}, 1:10 precision {helps[1]}."),
+    ]
+    if same(rand) and same(trained):
+        lines.append("So on this task the 4-qubit layer behaves like a classical layer with the same number of outputs. "
+                     "The large gap in the single run came from the original CNN's much bigger classifier head, "
+                     "not from the quantum layer.")
+    return lines
+
+
 def study_section(st, fig):
     arms = [a for a in ARM_ORDER if a in st["arms"]]
     n = max(st["arms"][a]["n_seeds"] for a in arms)
@@ -69,22 +99,9 @@ def study_section(st, fig):
                     + "".join(cells) + "</tr>")
 
     has_trained = "qnn_trained" in st["arms"]
-    bottom = ""
-    cs = {(c["a"], c["b"]): c for c in st["contrasts"]}
-    if has_trained and all(k in cs for k in [("qnn_frozen", "cnn_matched_frozen"), ("qnn_trained", "cnn_matched"), ("qnn_trained", "qnn_frozen")]):
-        def says(c):
-            return _verdict(c["balanced.accuracy"]), _verdict(c["imbalanced.precision"])
-        rand, trained, helps = (says(cs[k]) for k in [("qnn_frozen", "cnn_matched_frozen"), ("qnn_trained", "cnn_matched"), ("qnn_trained", "qnn_frozen")])
-        same = lambda v: all(x == "no clear difference" for x in v)
-        lines = [
-            "Random quantum features vs random classical features of the same shape: " + ("no clear difference." if same(rand) else f"accuracy {rand[0]}, 1:10 precision {rand[1]}."),
-            "Trained quantum layer vs trained classical layer of the same shape: " + ("no clear difference." if same(trained) else f"accuracy {trained[0]}, 1:10 precision {trained[1]}."),
-            "Training the circuit vs leaving it random: " + ("helps on both accuracy and 1:10 precision." if helps == ("first is higher", "first is higher") else f"accuracy {helps[0]}, 1:10 precision {helps[1]}."),
-        ]
-        if same(rand) and same(trained):
-            lines.append("So on this task the 4-qubit layer behaves like a classical layer with the same number of outputs. "
-                         "The large gap in the single run came from the original CNN's much bigger classifier head, not from the quantum layer.")
-        bottom = '<div class="note"><b>Bottom line.</b><ul>' + "".join(f"<li>{x}</li>" for x in lines) + "</ul></div>"
+    lines = bottom_lines(st)
+    bottom = ('<div class="note"><b>Bottom line.</b><ul>' + "".join(f"<li>{x}</li>" for x in lines)
+              + "</ul></div>") if lines else ""
     title = "matched capacity, trained circuit" if has_trained else "matched capacity (trained-circuit runs in progress)"
     pending = "" if has_trained else (
         "<p class=\"note\"><b>In progress:</b> the trained-circuit model (5 more runs, about 5 minutes each on a CPU) "
@@ -136,6 +153,25 @@ def main():
             st = json.load(f)
     study_html = study_section(st, img("outputs/fig_study.png")) if st else ""
     nav_study = '<a href="#study">Controlled study</a>' if st else ""
+    _bl = bottom_lines(st)
+    if _bl:
+        sa = st["arms"]
+        acc = lambda k: sa[k]["balanced.accuracy"]["mean"]
+        gq, gc = acc("qnn_trained") - acc("qnn_frozen"), acc("cnn_matched") - acc("cnn_matched_frozen")
+        gain_txt = (f"Training adds {gq:+.3f} accuracy to the circuit and {gc:+.3f} to the classical layer"
+                    + (", about the same." if abs(gq - gc) < 0.01 else "."))
+        summary_study = (
+            '<div class="note"><b>Main result (controlled study, 5 seeds, <a href="#study">section 5</a>).</b> '
+            "Matched for size and training, the quantum layer performs the same as a classical layer of the same shape: "
+            f"balanced accuracy {sa['qnn_trained']['balanced.accuracy']['mean']:.3f} (trained QNN) vs "
+            f"{sa['cnn_matched']['balanced.accuracy']['mean']:.3f} (matched CNN), "
+            f"and {sa['qnn_frozen']['balanced.accuracy']['mean']:.3f} vs {sa['cnn_matched_frozen']['balanced.accuracy']['mean']:.3f} "
+            "when both are left random. " + gain_txt
+            + "<ul>" + "".join(f"<li>{x}</li>" for x in _bl) + "</ul></div>")
+        tiles_title = "Single run (seed 42, original models): what happens at a realistic class ratio"
+    else:
+        summary_study = ""
+        tiles_title = ""
     single = " (single run)" if st else ""
     k = 1 if st else 0
 
@@ -233,7 +269,7 @@ def main():
 <body>
 <nav><div>
   <a href="#summary">Summary</a><a href="#setup">Setup</a><a href="#g0">Validity check</a>
-  <a href="#imbalance">Main result</a><a href="#balanced">Balanced results</a>
+  <a href="#imbalance">1:10 ratio</a><a href="#balanced">Balanced results</a>
   {nav_study}<a href="#limits">Limitations</a><a href="#next">Next steps</a><a href="#repro">Reproduce</a>
 </div></nav>
 <main>
@@ -242,6 +278,8 @@ def main():
   <h1>Face Detection Benchmark: Classical CNN vs Quanvolutional QNN</h1>
   <p class="sub">Stage 1 of a one-shot face recognition system. Faces from LFW, non-faces from CIFAR-10, 32&times;32 grayscale patches.</p>
 
+  {summary_study}
+  <h3>{tiles_title}</h3>
   <div class="tiles">
     <div class="tile"><div class="n">{pct(qnn['precision'])} &rarr; {pct(qnn_i['precision'])}</div>
       <div class="l">QNN precision, balanced &rarr; 1:10 background</div></div>

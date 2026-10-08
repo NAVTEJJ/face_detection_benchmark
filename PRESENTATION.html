@@ -59,7 +59,7 @@
 <body>
 <nav><div>
   <a href="#summary">Summary</a><a href="#setup">Setup</a><a href="#g0">Validity check</a>
-  <a href="#imbalance">Main result</a><a href="#balanced">Balanced results</a>
+  <a href="#imbalance">1:10 ratio</a><a href="#balanced">Balanced results</a>
   <a href="#study">Controlled study</a><a href="#limits">Limitations</a><a href="#next">Next steps</a><a href="#repro">Reproduce</a>
 </div></nav>
 <main>
@@ -68,6 +68,8 @@
   <h1>Face Detection Benchmark: Classical CNN vs Quanvolutional QNN</h1>
   <p class="sub">Stage 1 of a one-shot face recognition system. Faces from LFW, non-faces from CIFAR-10, 32&times;32 grayscale patches.</p>
 
+  <div class="note"><b>Main result (controlled study, 5 seeds, <a href="#study">section 5</a>).</b> Matched for size and training, the quantum layer performs the same as a classical layer of the same shape: balanced accuracy 0.975 (trained QNN) vs 0.974 (matched CNN), and 0.962 vs 0.962 when both are left random. Training adds +0.013 accuracy to the circuit and +0.012 to the classical layer, about the same.<ul><li>Random quantum features vs random classical features of the same shape: no clear difference.</li><li>Trained quantum layer vs trained classical layer of the same shape: no clear difference.</li><li>Training the circuit vs leaving it random: helps on both accuracy and 1:10 precision.</li><li>So on this task the 4-qubit layer behaves like a classical layer with the same number of outputs. The large gap in the single run came from the original CNN's much bigger classifier head, not from the quantum layer.</li></ul></div>
+  <h3>Single run (seed 42, original models): what happens at a realistic class ratio</h3>
   <div class="tiles">
     <div class="tile"><div class="n">0.963 &rarr; 0.586</div>
       <div class="l">QNN precision, balanced &rarr; 1:10 background</div></div>
